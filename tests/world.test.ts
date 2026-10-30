@@ -1,0 +1,7 @@
+import {describe,it,expect} from 'vitest';
+import {climateAt} from '../src/world/climate';
+import {routeAt,ROUTE_LENGTH,regionAt} from '../src/world/route';
+import {createVehicle,stepVehicle} from '../src/vehicle/physics';
+import {seeded} from '../src/core/random';
+describe('Aldmere world model',()=>{it('wraps the route without a discontinuity at the origin',()=>{const a=routeAt(0),b=routeAt(ROUTE_LENGTH);expect(a.x).toBeCloseTo(b.x);expect(a.z).toBeCloseTo(b.z);});it('keeps climate weights normalised',()=>{for(let d=0;d<ROUTE_LENGTH;d+=1379){const c=climateAt(d);expect(Object.values(c.weights).reduce((a,b)=>a+b,0)).toBeCloseTo(1,8);}});it('contains all three authored regions',()=>{expect(regionAt(1000)).toBe('Ember Reach');expect(regionAt(40000)).toBe('Greenmarch');expect(regionAt(80000)).toBe('Frostspine');});it('is deterministic for a seed and index',()=>{expect(seeded(6359,42)).toBe(seeded(6359,42));});});
+describe('Vehicle simulation',()=>{it('accelerates under throttle and brakes to a stop',()=>{const v=createVehicle();for(let i=0;i<600;i++)stepVehicle(v,{steer:0,throttle:1,brake:0,handbrake:false,indicator:0},1/60);expect(v.speed).toBeGreaterThan(10);for(let i=0;i<600;i++)stepVehicle(v,{steer:0,throttle:0,brake:1,handbrake:false,indicator:0},1/60);expect(v.speed).toBe(0);});it('clamps lateral position to road limits',()=>{const v=createVehicle();for(let i=0;i<600;i++)stepVehicle(v,{steer:1,throttle:1,brake:0,handbrake:false,indicator:0},1/60);expect(Math.abs(v.lateral)).toBeLessThanOrEqual(7.2);});});

@@ -1,0 +1,58 @@
+type AudioCtor = typeof AudioContext;
+
+export class AudioEngine {
+  private ctx: AudioContext | null = null;
+  private master: GainNode | null = null;
+  private engine: OscillatorNode | null = null;
+  private engineGain: GainNode | null = null;
+  private wind: AudioBufferSourceNode | null = null;
+  private windGain: GainNode | null = null;
+  private started = false;
+
+  /** Create the audio graph on first call (needs a user gesture); resume it on later calls. */
+  async start(): Promise<void> {
+    if (this.started) { await this.ctx?.resume(); return; }
+    const C: AudioCtor | undefined = window.AudioContext ?? (window as unknown as { webkitAudioContext?: AudioCtor }).webkitAudioContext;
+    if (!C) return;
+    this.ctx = new C();
+    this.master = this.ctx.createGain();
+    this.master.gain.value = .55;
+    this.master.connect(this.ctx.destination);
+    this.engine = this.ctx.createOscillator();
+    this.engine.type = 'sawtooth';
+    this.engineGain = this.ctx.createGain();
+    this.engineGain.gain.value = .0001;
+    this.engine.connect(this.engineGain).connect(this.master);
+    this.engine.start();
+    const buffer = this.ctx.createBuffer(1, this.ctx.sampleRate * 2, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    this.wind = this.ctx.createBufferSource();
+    this.wind.buffer = buffer;
+    this.wind.loop = true;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 500;
+    this.windGain = this.ctx.createGain();
+    this.windGain.gain.value = .0001;
+    this.wind.connect(filter).connect(this.windGain).connect(this.master);
+    this.wind.start();
+    this.started = true;
+  }
+
+  /** Silence the engine and wind (e.g. while the pause menu is open). */
+  pause(): void { void this.ctx?.suspend(); }
+
+  update(speed: number, master: number, engine: number, ambience: number): void {
+    if (!this.ctx || !this.engine || !this.engineGain || !this.windGain) return;
+    const t = this.ctx.currentTime;
+    this.master!.gain.setTargetAtTime(master, t, .12);
+    this.engine.frequency.setTargetAtTime(48 + speed * 3.2, t, .08);
+    this.engineGain.gain.setTargetAtTime((.012 + speed / 450) * engine, t, .1);
+    this.windGain.gain.setTargetAtTime((speed / 180) * ambience, t, .2);
+  }
+
+  setMaster(v: number): void { if (this.master && this.ctx) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, .1); }
+
+  stop(): void { void this.ctx?.close(); this.ctx = null; this.started = false; }
+}
